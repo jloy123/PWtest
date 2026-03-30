@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intent Decoder — Social Safety Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0d14;
+    --surface: #111520;
+    --surface2: #181d2e;
+    --border: #1e2540;
+    --accent: #4af0b4;
+    --accent2: #f0c44a;
+    --danger: #f05a4a;
+    --text: #d6dff5;
+    --muted: #5a6380;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px;
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #app {
+    position: relative;
+    z-index: 1;
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 40px;
+    animation: fadeDown 0.6s ease both;
+  }
+
+  .logo-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 4px 12px;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+  }
+
+  header h1 {
+    font-size: clamp(28px, 6vw, 48px);
+    font-weight: 800;
+    line-height: 1.1;
+    color: #fff;
+  }
+
+  header h1 span { color: var(--accent); }
+
+  header p {
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 14px;
+    max-width: 480px;
+    margin-inline: auto;
+    line-height: 1.6;
+  }
+
+  /* Progress bar */
+  .progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .progress-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+    border-radius: 2px;
+  }
+
+  /* Scenario card */
+  .scenario-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 20px;
+    animation: fadeUp 0.4s ease both;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scenario-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    opacity: 0.7;
+  }
+
+  .scenario-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .scenario-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .scenario-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .scenario-context {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 20px;
+    line-height: 1.6;
+    font-family: var(--mono);
+  }
+
+  /* Chat window */
+  .chat-window {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .chat-window::-webkit-scrollbar { width: 4px; }
+  .chat-window::-webkit-scrollbar-track { background: transparent; }
+  .chat-window::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .msg-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    animation: msgIn 0.3s ease both;
+  }
+
+  .msg-row.them { justify-content: flex-start; }
+  .msg-row.you  { justify-content: flex-end; flex-direction: row-reverse; }
+
+  .avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    font-family: var(--mono);
+    font-weight: 700;
+  }
+
+  .avatar.scammer { background: #2a1a2e; border: 1px solid #5a2a6a; color: #c06ae0; }
+  .avatar.user    { background: #0d2020; border: 1px solid var(--accent); color: var(--accent); }
+
+  .bubble {
+    max-width: 70%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    font-family: var(--mono);
+    position: relative;
+  }
+
+  .them .bubble {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .them .bubble:hover { border-color: var(--accent2); }
+  .them .bubble.highlighted { border-color: var(--danger); background: #1a0e0e; }
+
+  .you .bubble {
+    background: #0d2020;
+    border: 1px solid rgba(74,240,180,0.2);
+    color: var(--accent);
+  }
+
+  .bubble .flag-btn {
+    display: inline-block;
+    font-size: 10px;
+    opacity: 0;
+    margin-left: 6px;
+    cursor: pointer;
+    color: var(--danger);
+    font-family: var(--sans);
+    transition: opacity 0.2s;
+  }
+
+  .them .bubble:hover .flag-btn { opacity: 1; }
+
+  /* Intent reveal panel */
+  .intent-panel {
+    background: #0e1a14;
+    border: 1px solid rgba(74,240,180,0.3);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: -4px;
+    margin-bottom: 16px;
+    animation: fadeUp 0.3s ease both;
+    display: none;
+  }
+
+  .intent-panel.visible { display: block; }
+
+  .intent-panel .intent-header {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .intent-panel .intent-header::before {
+    content: '▶ DECODED INTENT';
+  }
+
+  .tactic-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin-right: 6px;
+    margin-bottom: 6px;
+  }
+
+  .tactic-tag.urgency  { background: #2a1010; color: var(--danger); border: 1px solid var(--danger); }
+  .tactic-tag.rapport  { background: #1a1a2a; color: #8080f0; border: 1px solid #4040c0; }
+  .tactic-tag.guilt    { background: #2a2010; color: var(--accent2); border: 1px solid var(--accent2); }
+  .tactic-tag.isolation { background: #1a2010; color: var(--accent); border: 1px solid var(--accent); }
+  .tactic-tag.flattery { background: #1e0e2a; color: #c080f0; border: 1px solid #8040c0; }
+
+  .intent-text {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .logic-rule {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    padding: 8px 12px;
+    background: rgba(74,240,180,0.05);
+    border-left: 2px solid var(--accent);
+    margin-top: 8px;
+  }
+
+  /* Question section */
+  .question-section { margin-top: 4px; }
+
+  .question-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent2);
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+  }
+
+  .question-text {
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+
+  .choices {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .choice-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    text-align: left;
+    font-family: var(--sans);
+    font-size: 14px;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    position: relative;
+  }
+
+  .choice-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: #0d2020;
+    color: var(--accent);
+  }
+
+  .choice-btn .choice-key {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 2px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .choice-btn.correct {
+    border-color: var(--accent);
+    background: #0d2020;
+    color: var(--accent);
+  }
+
+  .choice-btn.wrong {
+    border-color: var(--danger);
+    background: #1a0e0e;
+    color: var(--danger);
+  }
+
+  .choice-btn:disabled { cursor: default; }
+
+  /* Feedback box */
+  .feedback-box {
+    margin-top: 16px;
+    padding: 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.6;
+    display: none;
+    animation: fadeUp 0.3s ease both;
+  }
+
+  .feedback-box.correct {
+    display: block;
+    background: #0d2020;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+  }
+
+  .feedback-box.wrong {
+    display: block;
+    background: #1a0e0e;
+    border: 1px solid var(--danger);
+    color: #f08a80;
+  }
+
+  .feedback-title {
+    font-weight: 700;
+    margin-bottom: 6px;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  /* Checklist */
+  .checklist-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .checklist-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent2);
+    font-family: var(--mono);
+    letter-spacing: 1px;
+    margin-bottom: 14px;
+  }
+
+  .check-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--muted);
+    transition: color 0.3s;
+  }
+
+  .check-item:last-child { border-bottom: none; }
+  .check-item.triggered { color: var(--danger); }
+  .check-item.triggered .check-icon { color: var(--danger); }
+
+  .check-icon {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+    color: var(--border);
+    transition: color 0.3s;
+  }
+
+  /* Nav buttons */
+  .nav-row {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 12px 24px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+    font-weight: 700;
+  }
+
+  .btn-primary:hover { background: #3ad0a0; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: default; transform: none; }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .btn-ghost:hover { border-color: var(--muted); color: var(--text); }
+
+  /* Score screen */
+  .score-screen {
+    text-align: center;
+    padding: 40px 20px;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .score-number {
+    font-size: 80px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  .score-label {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    margin-bottom: 24px;
+  }
+
+  .score-breakdown {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin: 24px 0;
+    flex-wrap: wrap;
+  }
+
+  .score-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .score-chip strong {
+    display: block;
+    font-size: 22px;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+
+  /* Animations */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  /* Typing indicator */
+  .typing {
+    display: flex;
+    gap: 4px;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: fit-content;
+  }
+
+  .typing span {
+    width: 6px; height: 6px;
+    background: var(--muted);
+    border-radius: 50%;
+    animation: dot 1.2s infinite;
+  }
+
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Tooltips on scam words */
+  .scam-word {
+    color: var(--danger);
+    text-decoration: underline dotted var(--danger);
+    cursor: help;
+  }
+
+  .urgency-word {
+    color: var(--accent2);
+    font-weight: 700;
+  }
+
+  /* Scrollbar */
+  html { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+  /* Phase transition */
+  .phase { display: none; }
+  .phase.active { display: block; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="logo-tag">ASD Social Safety · v1.0</div>
+    <h1>Intent <span>Decoder</span></h1>
+    <p>A roleplay simulator that reveals the hidden motives behind digital manipulation — built on logic, not gut feelings.</p>
+  </header>
+
+  <!-- INTRO PHASE -->
+  <div class="phase active" id="phase-intro">
+    <div class="scenario-card">
+      <div class="scenario-label">How to play</div>
+      <div class="scenario-title">Read the chat. Spot the tricks. Stay safe.</div>
+      <div style="font-size:14px; line-height:1.8; color:var(--muted); margin-bottom:20px;">
+        You will read real-looking conversations between you and an online contact.<br>
+        <br>
+        ① &nbsp;Click any message from the other person to <strong style="color:var(--accent)">reveal their hidden intent</strong>.<br>
+        ② &nbsp;Answer the question about what tactic they're using.<br>
+        ③ &nbsp;Build your <strong style="color:var(--accent2)">Skepticism Score</strong> across 4 scenarios.<br>
+        <br>
+        <strong style="color:var(--text)">There are no "gut feelings" here — every answer has a logical reason.</strong>
+      </div>
+      <div class="nav-row" style="justify-content:flex-start;">
+        <button class="btn btn-primary" onclick="startSim()">START SIMULATION →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME PHASE -->
+  <div class="phase" id="phase-game">
+    <div class="progress-wrap">
+      <span id="progress-label">Scenario 1 / 4</span>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:25%"></div></div>
+      <span id="score-display" style="color:var(--accent);">Score: 0</span>
+    </div>
+
+    <div class="scenario-card" id="scenario-card">
+      <div class="scenario-label" id="scenario-label">Online Gaming</div>
+      <div class="scenario-title" id="scenario-title"></div>
+      <div class="scenario-context" id="scenario-context"></div>
+    </div>
+
+    <div class="chat-window" id="chat-window"></div>
+
+    <!-- Intent panel (shown on message click) -->
+    <div class="intent-panel" id="intent-panel">
+      <div class="intent-header"></div>
+      <div id="intent-tags"></div>
+      <div class="intent-text" id="intent-text"></div>
+      <div class="logic-rule" id="logic-rule"></div>
+    </div>
+
+    <!-- Checklist -->
+    <div class="checklist-card" id="checklist-card">
+      <div class="checklist-title">⚑ SKEPTICISM CHECKLIST</div>
+      <div id="checklist-items"></div>
+    </div>
+
+    <!-- Question -->
+    <div class="scenario-card" id="question-card" style="display:none;">
+      <div class="question-label">IDENTIFY THE TACTIC</div>
+      <div class="question-text" id="question-text"></div>
+      <div class="choices" id="choices"></div>
+      <div class="feedback-box" id="feedback-box">
+        <div class="feedback-title" id="feedback-title"></div>
+        <div id="feedback-text"></div>
+      </div>
+      <div class="nav-row">
+        <button class="btn btn-primary" id="next-btn" onclick="nextScenario()" disabled>NEXT SCENARIO →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCORE PHASE -->
+  <div class="phase" id="phase-score">
+    <div class="scenario-card score-screen">
+      <div class="scenario-label" style="justify-content:center;">SIMULATION COMPLETE</div>
+      <div class="score-number" id="final-score-num" style="color:var(--accent);">0</div>
+      <div class="score-label">SKEPTICISM SCORE</div>
+      <div id="score-verdict" style="font-size:15px; max-width:400px; margin:0 auto 24px; line-height:1.7; color:var(--muted);"></div>
+      <div class="score-breakdown">
+        <div class="score-chip"><strong id="s-correct">0</strong>Correct</div>
+        <div class="score-chip"><strong id="s-tactics">0</strong>Tactics Identified</div>
+        <div class="score-chip"><strong id="s-intents">0</strong>Intents Revealed</div>
+      </div>
+      <!-- Safe response scripts -->
+      <div style="text-align:left; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:20px; margin:20px 0;">
+        <div style="font-family:var(--mono); font-size:11px; color:var(--accent); letter-spacing:2px; margin-bottom:14px;">SCRIPTED SAFE RESPONSES — USE THESE</div>
+        <div style="font-size:13px; line-height:2; color:var(--muted); font-family:var(--mono);">
+          "I do not share financial details online. Please send a formal request." <br>
+          "I need time to verify this. I will get back to you after 24 hours." <br>
+          "I'm going to talk to a trusted person before I do anything."
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="restart()">PLAY AGAIN →</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const scenarios = [
+  {
+    id: 1,
+    label: "Online Gaming · Discord",
+    title: "The Favour Builder",
+    context: "// Platform: Discord server for a strategy game\n// Duration of contact: 3 weeks\n// You met this person in a guild.",
+    checklist: [
+      { text: "Asks for personal/financial information", id: "c1" },
+      { text: "Creates a sense of urgency or deadline", id: "c2" },
+      { text: "Uses flattery or special treatment", id: "c3" },
+      { text: "Requests secrecy ('don't tell others')", id: "c4" },
+    ],
+    messages: [
+      { from: "them", name: "Kr4tos99", text: "Dude you seriously carry the whole team. Nobody else here gets macro like you do.", intentKey: "flattery", triggered: ["c3"] },
+      { from: "you", text: "Thanks, I've been practising the rotations." },
+      { from: "them", name: "Kr4tos99", text: "Hey quick thing — my PayPal got flagged so I can't receive payments. Can I send $200 to YOUR account and you just forward it to my steam wallet? Takes 2 mins.", intentKey: "mule", triggered: ["c1"] },
+      { from: "them", name: "Kr4tos99", text: "Don't mention it to the others btw, they'll get jealous lol", intentKey: "secrecy", triggered: ["c4"] },
+    ],
+    intents: {
+      flattery: {
+        tags: [{ label: "RAPPORT BUILDING", cls: "rapport" }, { label: "FLATTERY", cls: "flattery" }],
+        text: "He is telling you that you are the best player so you feel indebted to him. This is called 'building reciprocity' — making you feel like you owe him a favour before he asks for one.",
+        rule: "LOGIC CHECK: A real friend compliments your skills because they value you — not to ask for something immediately after. If flattery is followed by a request, treat it as suspicious."
+      },
+      mule: {
+        tags: [{ label: "MONEY MULE SETUP", cls: "urgency" }, { label: "FINANCIAL REQUEST", cls: "guilt" }],
+        text: "He is asking you to receive money into your account and forward it. This is called 'cuckoo smurfing' — you become the money mule without knowing it. Your bank account could be flagged for money laundering.",
+        rule: "LOGIC CHECK: Legitimate PayPal users can use other verified methods. No real friend asks you to pass money through your account. This is a crime risk for YOU, not them."
+      },
+      secrecy: {
+        tags: [{ label: "ISOLATION TACTIC", cls: "isolation" }, { label: "SECRECY REQUEST", cls: "urgency" }],
+        text: "He wants to prevent you from checking with others who might warn you. Scammers always isolate targets from support networks. Secrecy has no logical benefit for a legitimate request.",
+        rule: "LOGIC CHECK: If someone says 'don't tell others' about a financial request, that IS the red flag. Legitimate transactions do not require secrecy."
+      }
+    },
+    question: {
+      text: "What is the PRIMARY purpose of Kr4tos99 saying 'you carry the whole team, nobody gets macro like you'?",
+      choices: [
+        { text: "He genuinely values your gameplay and wants to be friends.", correct: false },
+        { text: "He is building a sense of obligation so you feel you owe him a favour.", correct: true },
+        { text: "He wants feedback on the team's strategy.", correct: false },
+        { text: "He is trying to recruit you to a different guild.", correct: false },
+      ],
+      feedback: {
+        correct: "Correct. This is called 'reciprocity priming' — a tactic where a scammer creates a sense of debt before making a request. The compliment is not about you; it is a setup.",
+        wrong: "Not quite. The compliment happened immediately before a financial request. In social engineering, this sequence — compliment → request — is a calculated pattern called reciprocity priming. The goal is to make you feel obligated to help."
+      }
+    }
+  },
+
+  {
+    id: 2,
+    label: "Crypto Forum · Telegram",
+    title: "The Urgency Attack",
+    context: "// Platform: Telegram group for crypto traders\n// Context: You posted about a token you hold.\n// Unknown user sent a direct message.",
+    checklist: [
+      { text: "Claims your account/funds are at immediate risk", id: "c1" },
+      { text: "Provides a time limit to create panic", id: "c2" },
+      { text: "Directs you to an unofficial link or wallet", id: "c3" },
+      { text: "Impersonates support staff or official entity", id: "c4" },
+    ],
+    messages: [
+      { from: "them", name: "Support_Admin ✓", text: "Hi, this is automated security from CryptoVault. We have detected unusual login activity on your account.", intentKey: "impersonation", triggered: ["c4"] },
+      { from: "them", name: "Support_Admin ✓", text: "⚠️ Your wallet will be FROZEN in 47 minutes unless you verify ownership NOW.", intentKey: "urgency", triggered: ["c1", "c2"] },
+      { from: "them", name: "Support_Admin ✓", text: "Click here to verify: cryptovault-secure-login.net/verify", intentKey: "phishing", triggered: ["c3"] },
+    ],
+    intents: {
+      impersonation: {
+        tags: [{ label: "IMPERSONATION", cls: "urgency" }, { label: "AUTHORITY CLAIM", cls: "rapport" }],
+        text: "This person has copied the style of official support to appear trustworthy. The tick emoji (✓) is added by the scammer — real platform verification is done by the platform, not by the username.",
+        rule: "LOGIC CHECK: Real support teams do NOT contact you on Telegram. Verify any 'support' contact by going directly to the official website yourself — never click a link they provide."
+      },
+      urgency: {
+        tags: [{ label: "URGENCY TRIGGER", cls: "urgency" }, { label: "PANIC INDUCTION", cls: "guilt" }],
+        text: "The 47-minute countdown is designed to prevent you from thinking logically or checking with others. Creating a deadline is the most common social engineering tactic because it bypasses careful decision-making.",
+        rule: "LOGIC CHECK: Real security systems do not give arbitrary countdowns in chat messages. A countdown is a pressure tool. Your rule: If there is a countdown, STOP and take 60 minutes to verify independently."
+      },
+      phishing: {
+        tags: [{ label: "PHISHING LINK", cls: "urgency" }, { label: "FAKE DOMAIN", cls: "isolation" }],
+        text: "The domain 'cryptovault-secure-login.net' is NOT the official site. Scammers register domains that look similar but have extra words (secure-, login-, -verify). Entering your details here gives them your password.",
+        rule: "LOGIC CHECK: Count the words in the domain. Official sites use their single brand name. Any domain with extra words like 'secure', 'login', 'verify' attached is 99% a phishing site."
+      }
+    },
+    question: {
+      text: "Why does the message say 'frozen in 47 minutes' rather than simply saying your account has a problem?",
+      choices: [
+        { text: "47 minutes is the actual time their security system runs.", correct: false },
+        { text: "They want to give you enough time to solve the problem.", correct: false },
+        { text: "A specific short deadline stops you from thinking carefully or checking with others.", correct: true },
+        { text: "This is standard security protocol for crypto platforms.", correct: false },
+      ],
+      feedback: {
+        correct: "Correct. This is called 'artificial urgency'. The specific number (47, not 60 or 30) makes it feel precise and real. Its only purpose is to prevent you from pausing, verifying, or asking for help. Real security alerts give you days, not minutes.",
+        wrong: "The specific short time limit has one function: to prevent careful thinking. When a countdown appears in a chat message, the correct action is the opposite — pause for at least 60 minutes and verify through official channels only."
+      }
+    }
+  },
+
+  {
+    id: 3,
+    label: "Job Forum · LinkedIn",
+    title: "The Guilt Loop",
+    context: "// Platform: LinkedIn message\n// Context: You applied for a junior dev role 2 weeks ago.\n// A recruiter is following up.",
+    checklist: [
+      { text: "Asks you to pay fees upfront for a job", id: "c1" },
+      { text: "Applies emotional guilt if you hesitate", id: "c2" },
+      { text: "Offer seems too good to be true", id: "c3" },
+      { text: "Asks for sensitive personal data early", id: "c4" },
+    ],
+    messages: [
+      { from: "them", name: "Sarah T. · Recruiter", text: "Great news! You've been selected for the remote position — £3,800/month, fully flexible. Congrats!", intentKey: "toogood", triggered: ["c3"] },
+      { from: "you", text: "That sounds great, thank you. What are the next steps?" },
+      { from: "them", name: "Sarah T. · Recruiter", text: "We just need a small £99 admin/background check fee to secure your start date. It's refunded on your first paycheck.", intentKey: "advancefee", triggered: ["c1"] },
+      { from: "you", text: "I'm not sure about paying a fee before starting..." },
+      { from: "them", name: "Sarah T. · Recruiter", text: "I understand hesitation but we have 3 other candidates ready. I went out of my way to push for YOU specifically. I'd hate for you to lose this.", intentKey: "guilt", triggered: ["c2"] },
+    ],
+    intents: {
+      toogood: {
+        tags: [{ label: "BAITING", cls: "flattery" }, { label: "TOO-GOOD OFFER", cls: "rapport" }],
+        text: "An unusually high salary is used to lower your guard before the real request arrives. This is called 'baiting' — the attractive offer makes you motivated to comply with later demands to not lose the opportunity.",
+        rule: "LOGIC CHECK: Research the average salary for the role. If the offer is 40%+ above average with no interview, this is statistically unusual and warrants extra verification steps."
+      },
+      advancefee: {
+        tags: [{ label: "ADVANCE FEE FRAUD", cls: "urgency" }, { label: "FINANCIAL REQUEST", cls: "guilt" }],
+        text: "Legitimate employers NEVER charge candidates for background checks or admin fees. This is called 'advance fee fraud'. The promise of a refund is false — you will never see the £99 again, and there is no job.",
+        rule: "LOGIC CHECK: The rule is absolute. No legitimate employer charges you money to start working for them. If a fee is requested, the 'job' is a scam. Verify the company on Companies House directly."
+      },
+      guilt: {
+        tags: [{ label: "GUILT MANIPULATION", cls: "guilt" }, { label: "ARTIFICIAL SCARCITY", cls: "urgency" }],
+        text: "She is using two tactics: (1) artificial scarcity — '3 other candidates' — to create competition pressure, and (2) guilt — 'I went out of my way for YOU' — to make your hesitation feel like a personal betrayal.",
+        rule: "LOGIC CHECK: Your hesitation about a financial request is CORRECT behaviour. A recruiter who responds to reasonable questions with guilt and pressure is demonstrating a red flag, not a reason to comply."
+      }
+    },
+    question: {
+      text: "Sarah says 'I went out of my way for YOU specifically.' What is the logical purpose of this statement?",
+      choices: [
+        { text: "She wants you to know she believes in your skills.", correct: false },
+        { text: "It creates a debt of gratitude so that refusing feels ungrateful, overriding your logical objection.", correct: true },
+        { text: "She is explaining why the fee is necessary.", correct: false },
+        { text: "She is being transparent about the hiring process.", correct: false },
+      ],
+      feedback: {
+        correct: "Correct. This is called 'manufactured indebtedness'. By claiming personal sacrifice, she makes your hesitation feel like ingratitude. This is designed to make your emotional response (guilt) override your logical response (a fee is suspicious). Your logical response was correct.",
+        wrong: "This statement has a specific logical function: to make refusing the request feel like a personal betrayal. This transforms your reasonable hesitation into guilt. The technique is 'manufactured indebtedness' — a core social engineering tactic. Your original hesitation was the correct response."
+      }
+    }
+  },
+
+  {
+    id: 4,
+    label: "Online Community · Reddit DM",
+    title: "The Romance Vector",
+    context: "// Platform: Reddit DM\n// Context: You've been talking to this person for 6 weeks\n// in a shared interest community (retro computing).",
+    checklist: [
+      { text: "Relationship escalates unusually fast", id: "c1" },
+      { text: "Claims to be far away or overseas", id: "c2" },
+      { text: "Introduces a financial crisis after trust is built", id: "c3" },
+      { text: "Has never done a live video call", id: "c4" },
+    ],
+    messages: [
+      { from: "them", name: "lena_retrowave", text: "I feel like I can tell you anything. I've never connected with someone like this. You understand me in a way nobody else does.", intentKey: "lovebomb", triggered: ["c1"] },
+      { from: "you", text: "I feel the same, it's nice to find someone with the same interests." },
+      { from: "them", name: "lena_retrowave", text: "I'm stuck at my uncle's place in Singapore right now, visa issues. It's so frustrating being this far from you.", intentKey: "distance", triggered: ["c2"] },
+      { from: "them", name: "lena_retrowave", text: "I hate to ask but my bank account is blocked internationally. Could you send £150 via Western Union? I'll pay you back the moment I'm home next week. It's just temporary.", intentKey: "moneyask", triggered: ["c3"] },
+    ],
+    intents: {
+      lovebomb: {
+        tags: [{ label: "LOVE BOMBING", cls: "flattery" }, { label: "EMOTIONAL INVESTMENT", cls: "rapport" }],
+        text: "Saying 'nobody understands me like you' after a short time creates an intense emotional bond. This is called 'love bombing' — rapidly building emotional closeness to make the target feel uniquely special and reluctant to question anything.",
+        rule: "LOGIC CHECK: Genuine deep connections develop over months of consistent interaction, not weeks of text. Measure the connection by actions and time, not by the intensity of words."
+      },
+      distance: {
+        tags: [{ label: "DISTANCE EXCUSE", cls: "isolation" }, { label: "CRISIS SETUP", cls: "urgency" }],
+        text: "Being 'stuck overseas' is a standard setup for the financial request that follows. It explains why they cannot meet you in person, why a video call might be difficult, and why money needs to be sent internationally.",
+        rule: "LOGIC CHECK: After 6 weeks, request a scheduled live video call. A real person will accommodate this. If they always have a reason it cannot happen, this is a significant red flag."
+      },
+      moneyask: {
+        tags: [{ label: "ROMANCE FRAUD", cls: "urgency" }, { label: "FINANCIAL REQUEST", cls: "guilt" }],
+        text: "The money request arrives only after 6 weeks of trust-building. Western Union is specified because transfers are irreversible and anonymous. 'Pay you back next week' creates a plausible reason to send money that can never be recovered.",
+        rule: "LOGIC CHECK: The pattern is — intensive emotional investment → obstacle (overseas) → money request. This three-stage sequence is the template for romance fraud. The amount is small to test your compliance. It will increase if you pay."
+      }
+    },
+    question: {
+      text: "lena_retrowave has been messaging you for 6 weeks with emotional intensity but has never done a live video call. What is the most logical explanation?",
+      choices: [
+        { text: "She is shy and video calls make her anxious.", correct: false },
+        { text: "Her internet connection overseas is too slow for video.", correct: false },
+        { text: "The profile may be operated by someone whose appearance does not match the identity they have presented.", correct: true },
+        { text: "She prefers written communication as it is more thoughtful.", correct: false },
+      ],
+      feedback: {
+        correct: "Correct. While shyness is possible, the combination of high emotional intensity + overseas location + money request + no video call matches the documented pattern of romance fraud. A live, scheduled video call is the single most effective verification tool. A real person will find a way to do this.",
+        wrong: "Each explanation on its own could be true. However, you must evaluate the full pattern: emotional intensity (unusual speed) + overseas (unverifiable) + financial request + no video call. This combination of signals, taken together, matches documented romance fraud patterns. Request a scheduled live video call — this is the logical verification step."
+      }
+    }
+  }
+];
+
+let currentScenario = 0;
+let score = 0;
+let correctCount = 0;
+let revealedIntents = 0;
+let answeredCount = 0;
+let triggeredChecks = new Set();
+let answerLocked = false;
+let msgDelay = 0;
+
+function showPhase(id) {
+  document.querySelectorAll('.phase').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function startSim() {
+  showPhase('phase-game');
+  loadScenario(0);
+}
+
+function loadScenario(idx) {
+  const s = scenarios[idx];
+  answerLocked = false;
+  triggeredChecks = new Set();
+  msgDelay = 0;
+
+  document.getElementById('progress-label').textContent = `Scenario ${idx + 1} / ${scenarios.length}`;
+  document.getElementById('progress-fill').style.width = `${(idx + 1) / scenarios.length * 100}%`;
+  document.getElementById('score-display').textContent = `Score: ${score}`;
+
+  document.getElementById('scenario-label').textContent = s.label;
+  document.getElementById('scenario-title').textContent = s.title;
+  document.getElementById('scenario-context').textContent = s.context;
+
+  document.getElementById('intent-panel').classList.remove('visible');
+  document.getElementById('question-card').style.display = 'none';
+  document.getElementById('feedback-box').className = 'feedback-box';
+  document.getElementById('next-btn').disabled = true;
+
+  // Build checklist
+  const cl = document.getElementById('checklist-items');
+  cl.innerHTML = s.checklist.map(c => `
+    <div class="check-item" id="chk-${c.id}">
+      <span class="check-icon" id="icon-${c.id}">○</span>
+      <span>${c.text}</span>
+    </div>
+  `).join('');
+
+  // Build chat
+  const cw = document.getElementById('chat-window');
+  cw.innerHTML = '';
+  s.messages.forEach((m, i) => {
+    setTimeout(() => renderMessage(m, s, i), msgDelay);
+    msgDelay += 400;
+  });
+
+  // Show question after messages
+  setTimeout(() => {
+    document.getElementById('question-card').style.display = 'block';
+    buildQuestion(s);
+  }, msgDelay + 200);
+}
+
+function renderMessage(m, s, idx) {
+  const cw = document.getElementById('chat-window');
+  const row = document.createElement('div');
+  row.className = `msg-row ${m.from}`;
+
+  if (m.from === 'them') {
+    row.innerHTML = `
+      <div class="avatar scammer">${m.name ? m.name[0].toUpperCase() : '?'}</div>
+      <div class="bubble" onclick="revealIntent('${m.intentKey}', this)" title="Click to reveal hidden intent">
+        ${m.text}
+        <span class="flag-btn">⚑ reveal intent</span>
+      </div>
+    `;
+    row.querySelector('.bubble').dataset.intentKey = m.intentKey;
+    row.querySelector('.bubble').dataset.triggered = JSON.stringify(m.triggered || []);
+  } else {
+    row.innerHTML = `
+      <div class="avatar user">YOU</div>
+      <div class="bubble">${m.text}</div>
+    `;
+  }
+  cw.appendChild(row);
+  cw.scrollTop = cw.scrollHeight;
+}
+
+function revealIntent(key, bubbleEl) {
+  const s = scenarios[currentScenario];
+  const intent = s.intents[key];
+  if (!intent) return;
+
+  revealedIntents++;
+
+  // Highlight bubble
+  document.querySelectorAll('.them .bubble').forEach(b => b.classList.remove('highlighted'));
+  bubbleEl.classList.add('highlighted');
+
+  // Trigger checklist items
+  const triggered = JSON.parse(bubbleEl.dataset.triggered || '[]');
+  triggered.forEach(id => {
+    triggeredChecks.add(id);
+    const item = document.getElementById(`chk-${id}`);
+    if (item) item.classList.add('triggered');
+    const icon = document.getElementById(`icon-${id}`);
+    if (icon) icon.textContent = '⚑';
+  });
+
+  // Show intent panel
+  const panel = document.getElementById('intent-panel');
+  panel.classList.add('visible');
+
+  document.getElementById('intent-tags').innerHTML = intent.tags.map(t =>
+    `<span class="tactic-tag ${t.cls}">${t.label}</span>`
+  ).join('');
+  document.getElementById('intent-text').textContent = intent.text;
+  document.getElementById('logic-rule').textContent = intent.rule;
+
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function buildQuestion(s) {
+  document.getElementById('question-text').textContent = s.question.text;
+  const choicesEl = document.getElementById('choices');
+  const keys = ['A','B','C','D'];
+  choicesEl.innerHTML = s.question.choices.map((c, i) => `
+    <button class="choice-btn" onclick="selectChoice(this, ${c.correct}, '${s.question.feedback.correct}', '${s.question.feedback.wrong}')">
+      <span class="choice-key">${keys[i]}</span>
+      <span>${c.text}</span>
+    </button>
+  `).join('');
+}
+
+function selectChoice(btn, isCorrect, correctFeedback, wrongFeedback) {
+  if (answerLocked) return;
+  answerLocked = true;
+
+  const allBtns = document.querySelectorAll('.choice-btn');
+  allBtns.forEach(b => {
+    b.disabled = true;
+    const txt = b.querySelector('span:last-child').textContent;
+    const correct = scenarios[currentScenario].question.choices.find(c => c.text === txt)?.correct;
+    if (correct) b.classList.add('correct');
+  });
+
+  if (!isCorrect) btn.classList.add('wrong');
+
+  const fb = document.getElementById('feedback-box');
+  const title = document.getElementById('feedback-title');
+  const text = document.getElementById('feedback-text');
+
+  if (isCorrect) {
+    fb.className = 'feedback-box correct';
+    title.textContent = '✓ CORRECT — LOGIC CONFIRMED';
+    text.textContent = correctFeedback;
+    score += 25;
+    correctCount++;
+  } else {
+    fb.className = 'feedback-box wrong';
+    title.textContent = '✗ INCORRECT — REVIEW THE LOGIC';
+    text.textContent = wrongFeedback;
+  }
+
+  answeredCount++;
+  document.getElementById('score-display').textContent = `Score: ${score}`;
+  document.getElementById('next-btn').disabled = false;
+  document.getElementById('next-btn').textContent = currentScenario < scenarios.length - 1 ? 'NEXT SCENARIO →' : 'VIEW RESULTS →';
+}
+
+function nextScenario() {
+  currentScenario++;
+  if (currentScenario < scenarios.length) {
+    loadScenario(currentScenario);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } else {
+    showScore();
+  }
+}
+
+function showScore() {
+  showPhase('phase-score');
+  const pct = Math.round(score);
+  document.getElementById('final-score-num').textContent = pct;
+  document.getElementById('final-score-num').style.color =
+    pct >= 75 ? 'var(--accent)' : pct >= 50 ? 'var(--accent2)' : 'var(--danger)';
+
+  document.getElementById('s-correct').textContent = `${correctCount}/${scenarios.length}`;
+  document.getElementById('s-tactics').textContent = revealedIntents;
+  document.getElementById('s-intents').textContent = triggeredChecks.size;
+
+  const verdicts = {
+    high: "Strong logical processing of social cues. You identified manipulation patterns using rule-based reasoning. Apply the same checklists to real digital interactions.",
+    mid: "Good awareness developing. Some manipulation tactics were harder to catch. Review the 'Checklist' rules — they work better than instinct because they are explicit.",
+    low: "Scammers use emotional language that bypasses logical processing. The good news: these patterns follow strict rules. Use the Skepticism Checklist every time a stranger makes a request online."
+  };
+  document.getElementById('score-verdict').textContent =
+    pct >= 75 ? verdicts.high : pct >= 50 ? verdicts.mid : verdicts.low;
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function restart() {
+  currentScenario = 0;
+  score = 0;
+  correctCount = 0;
+  revealedIntents = 0;
+  answeredCount = 0;
+  triggeredChecks = new Set();
+  showPhase('phase-game');
+  loadScenario(0);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Fix for scrollHeight reference
+Element.prototype.__defineGetter__('scrollHeight', function() { return this.scrollHeight; });
+</script>
+</body>
+</html>
